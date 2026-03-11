@@ -22,6 +22,7 @@ HAVING SUM(SalesAmount) > (
 ORDER BY TotalPurchases DESC;
 
 -- 22.	List products whose ListPrice is higher than the average ListPrice in their category.
+-- First CTE is to join DimProduct with DimProductSubcategory and DimProductCategory
 WITH RefinedProducts AS (
     SELECT
         dp.ProductKey AS ProductKey,
@@ -36,6 +37,7 @@ WITH RefinedProducts AS (
         ON dps.ProductCategoryKey = dpc.ProductCategoryKey
     WHERE ListPrice IS NOT NULL
 ),
+-- CTE to get average list price by product category
 AvgListPrice AS (
     SELECT
         ProductCategoryKey,
@@ -50,6 +52,7 @@ SELECT
     ListPrice,
     AvgListPrice
 FROM RefinedProducts rp
+-- Join the two CTEs together to get table of individual products compared to avg list price for product category
 INNER JOIN AvgListPrice alp
     ON rp.ProductCategoryKey = alp.ProductCategoryKey
 WHERE ListPrice > AvgListPrice
@@ -80,22 +83,3 @@ WHERE OrderDateKey IN (
     SELECT OrderDateKey FROM TopFiveSalesDays
 );
 
--- 24.	Find products that have been sold more times than the median sales frequency across all products.
-
-
--- 25.	Show customers who purchased all products in a specific subcategory (relational division).
-
-
--- 26.	Use a CTE to calculate each customer's total purchases, then find customers in the top 10%.
-
-
--- 27.	Create a recursive CTE to show the employee hierarchy from DimEmployee.
-
-
--- 28.	Build a CTE that calculates year-over-year sales growth by product.
-
-
--- 29.	Use multiple CTEs to compare internet sales vs. reseller sales by territory.
-
-
--- 30.	Create a CTE to identify customers with gaps of more than 365 days between purchases.
