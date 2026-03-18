@@ -258,3 +258,25 @@ FROM customer_territory_sales
 WHERE CustomerRank <=5;
 
 -- Using a CTE, calculate the average sales per month and flag months below the average.
+WITH monthly_sales AS (
+	-- Calculate the Monthly Sales Totals
+	SELECT 
+		FORMAT(OrderDate, 'yyyy-MM') AS SalesMonth,
+		SUM(SalesAmount) AS MonthlySales
+	FROM FactInternetSales
+	GROUP BY FORMAT(OrderDate, 'yyyy-MM')
+),
+avg_monthly_sales AS (
+	-- Calculate the Monthly Sales Average
+	SELECT
+		AVG(MonthlySales) AS AvgMonthlySales
+	FROM monthly_sales
+)
+SELECT
+	SalesMonth,
+	MonthlySales,
+	AvgMonthlySales,
+	MonthlySales - AvgMonthlySales AS BelowAverage
+FROM monthly_sales, avg_monthly_sales
+WHERE MonthlySales < AvgMonthlySales
+ORDER BY BelowAverage;
