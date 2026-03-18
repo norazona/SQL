@@ -234,5 +234,27 @@ WHERE UnitPrice > Percentile_75_Cont
 ORDER BY ProductKey ASC
 
 -- Find the top 5 customers in each territory using a window function inside a CTE.
+WITH customer_territory_sales AS (
+	SELECT 
+		CONCAT(c.FirstName, ' ', c.LastName) AS FullName,
+		st.SalesTerritoryCountry AS Country,
+		SUM(SalesAmount) AS TotalSales,
+		DENSE_RANK() OVER (PARTITION BY st.SalesTerritoryCountry ORDER BY SUM(SalesAmount) DESC) AS CustomerRank
+	FROM FactInternetSales s
+	INNER JOIN DimCustomer c
+		ON s.CustomerKey = c.CustomerKey
+	INNER JOIN DimSalesTerritory st
+		ON s.SalesTerritoryKey = st.SalesTerritoryKey
+	GROUP BY
+		CONCAT(c.FirstName, ' ', c.LastName),
+		st.SalesTerritoryCountry
+)
+SELECT 
+	FullName,
+	Country,
+	TotalSales,
+	CustomerRank
+FROM customer_territory_sales
+WHERE CustomerRank <=5;
 
 -- Using a CTE, calculate the average sales per month and flag months below the average.
