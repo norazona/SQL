@@ -1,5 +1,4 @@
 -- Section 4: Window Functions
-
 -- Rank products by total sales within each Category using RANK() or DENSE_RANK().
 SELECT 
 	EnglishProductCategoryName AS Category,
@@ -61,8 +60,39 @@ ORDER BY
 	MonthNumberOfYear;
 
 -- Compute the cumulative sum of OrderQuantity per Product.
+SELECT 
+	p.EnglishProductName AS Product,
+	DATETRUNC(Month, OrderDate) AS OrderMonth,
+	SUM(SalesAmount) AS MonthlySales,
+	SUM(SUM(SalesAmount)) OVER (PARTITION BY p.EnglishProductName ORDER BY DATETRUNC(Month, OrderDate) ASC) AS CumulativeSum
+FROM FactInternetSales s
+INNER JOIN DimProduct p
+	ON s.ProductKey = p.ProductKey
+GROUP BY 
+	p.EnglishProductName,
+	DATETRUNC(Month, OrderDate)
+ORDER BY 
+	p.EnglishProductName,
+	DATETRUNC(Month, OrderDate);	
 
 -- Identify the previous month’s SalesAmount for each Customer using LAG().
+WITH monthly_sales AS (
+	-- Get the Monthly Sales by Customer
+	SELECT
+		CustomerKey,
+		DATEFROMPARTS(YEAR(OrderDate), MONTH(OrderDate), 1) AS SalesMonth,
+		SUM(SalesAmount) AS MonthlySales
+	FROM FactInternetSales 
+	GROUP BY 
+		CustomerKey,
+		DATEFROMPARTS(YEAR(OrderDate), MONTH(OrderDate), 1)
+)
+SELECT 
+	CustomerKey,
+	SalesMonth,
+	MonthlySales,
+	COALESCE(LAG(MonthlySales) OVER (PARTITION BY CustomerKey ORDER BY SalesMonth ASC), 0) AS PreviousMonthSales
+FROM monthly_sales
 
 -- Find customers whose monthly sales exceeded their average monthly sales using WINDOW() functions.
 

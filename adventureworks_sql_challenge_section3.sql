@@ -21,6 +21,7 @@ ORDER BY TotalSales DESC;
 
 -- Create a CTE that calculates monthly sales growth per ProductCategory.
 WITH monthly_sales AS (
+	-- Calculate Monthly Sales for each Product Category
 	SELECT 
 		pc.EnglishProductCategoryName AS ProductCategory,
 		DATETRUNC(MONTH,s.OrderDate) AS YearMonth,
