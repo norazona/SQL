@@ -18,7 +18,47 @@ GROUP BY
 	EnglishProductName, 
 	EnglishProductCategoryName;
 
+-- Calculate the moving average of SalesAmount over the past 3 months.
+SELECT 
+	DATETRUNC(Month, OrderDate) AS OrderMonth,
+	SUM(SalesAmount) AS AvgSalesAmount,
+	AVG(SUM(SalesAmount)) OVER (ORDER BY DATETRUNC(Month, OrderDate) ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS MA
+FROM FactInternetSales
+GROUP BY DATETRUNC(Month, OrderDate);
+
 -- Calculate the moving average of SalesAmount over the past 3 months for each territory.
+WITH territory_monthly_sales AS (
+-- Calculate the Monthly Average for each territory
+	SELECT 
+		SalesTerritoryRegion AS Territory,
+		CalendarYear,
+		MonthNumberOfYear,
+		SUM(SalesAmount) AS MonthlySales
+	FROM FactInternetSales s
+	INNER JOIN DimDate d
+		ON s.OrderDateKey = d.DateKey
+	INNER JOIN DimSalesTerritory st
+		ON s.SalesTerritoryKey = st.SalesTerritoryKey
+	GROUP BY 
+		SalesTerritoryRegion,
+		CalendarYear,
+		MonthNumberOfYear
+)
+SELECT
+	Territory,
+	CalendarYear,
+	MonthNumberOfYear,
+	MonthlySales,
+	AVG(MonthlySales) OVER (
+		PARTITION BY Territory 
+		ORDER BY CalendarYear, MonthNumberOfYear ASC
+		ROWS BETWEEN 2 PRECEDING AND CURRENT ROW
+	) AS MovingAverage
+FROM territory_monthly_sales
+ORDER BY 
+	Territory,
+	CalendarYear,
+	MonthNumberOfYear;
 
 -- Compute the cumulative sum of OrderQuantity per Product.
 
