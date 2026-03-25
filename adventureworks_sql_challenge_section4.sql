@@ -92,13 +92,91 @@ SELECT
 	SalesMonth,
 	MonthlySales,
 	COALESCE(LAG(MonthlySales) OVER (PARTITION BY CustomerKey ORDER BY SalesMonth ASC), 0) AS PreviousMonthSales
-FROM monthly_sales
+FROM monthly_sales;
 
 -- Find customers whose monthly sales exceeded their average monthly sales using WINDOW() functions.
+WITH customer_monthly_sales AS (
+	-- Get the Monthly Sales by Customer
+	SELECT
+		CustomerKey,
+		DATEFROMPARTS(YEAR(OrderDate), MONTH(OrderDate), 1) AS SalesMonth,
+		SUM(SalesAmount) AS MonthlySales
+	FROM FactInternetSales 
+	GROUP BY 
+		CustomerKey,
+		DATEFROMPARTS(YEAR(OrderDate), MONTH(OrderDate), 1)
+),
+customer_monthly_difference AS (
+	SELECT 
+		CustomerKey,
+		SalesMonth,
+		MonthlySales,
+		AVG(MonthlySales) OVER (PARTITION BY CustomerKey) AS AvgMonthlySales,
+		MonthlySales - AVG(MonthlySales) OVER (PARTITION BY CustomerKey) AS MonthlyDifference
+	FROM customer_monthly_sales
+)
+SELECT
+	CustomerKey,
+	SalesMonth,
+	MonthlySales,
+	AvgMonthlySales,
+	MonthlyDifference
+FROM customer_monthly_difference
+WHERE MonthlyDifference > 0;
 
 -- Determine the top-selling product per month using ROW_NUMBER().
+WITH product_monthly_sales AS (
+	SELECT
+		s.ProductKey,
+		p.EnglishProductName AS ProductName,
+		DATEFROMPARTS(YEAR(OrderDate),MONTH(OrderDate),1) AS YearMonth,
+		SUM(SalesAmount) AS TotalSales
+	FROM FactInternetSales s
+	INNER JOIN DimProduct p
+		ON s.ProductKey = p.ProductKey
+	GROUP BY 
+		s.ProductKey,
+		p.EnglishProductName,
+		DATEFROMPARTS(YEAR(OrderDate),MONTH(OrderDate),1)
+),
+month_rank AS (
+	SELECT 
+		ProductKey,
+		ProductName,
+		YearMonth,
+		TotalSales,
+		ROW_NUMBER() OVER (PARTITION BY YearMonth ORDER BY TotalSales DESC) AS MonthlyRank
+	FROM product_monthly_sales
+)
+SELECT 
+	ProductKey,
+	ProductName,
+	YearMonth,
+	TotalSales
+FROM month_rank
+WHERE MonthlyRank = 1
+ORDER BY YearMonth ASC;
 
 -- Calculate each product’s contribution to its Category’s total sales using SUM() OVER().
+
+SELECT
+	s.ProductKey,
+	pc.EnglishProductCategoryName AS ProductCategory,
+	p.EnglishProductName AS ProductName,
+	SUM(SalesAmount) AS TotalSales,
+	SUM(SUM(SalesAmount)) OVER (PARTITION BY pc.EnglishProductCategoryName) AS ProductCategorySales,
+	(SUM(SalesAmount) / SUM(SUM(SalesAmount)) OVER (PARTITION BY pc.EnglishProductCategoryName)) * 100 AS ProductContributionPercent
+FROM FactInternetSales s
+INNER JOIN DimProduct p
+	ON s.ProductKey = p.ProductKey
+INNER JOIN DimProductSubcategory psc
+	ON p.ProductSubcategoryKey = psc.ProductSubcategoryKey
+INNER JOIN DimProductCategory pc
+	ON psc.ProductCategoryKey = pc.ProductCategoryKey
+GROUP BY
+	s.ProductKey,
+	p.EnglishProductName,
+	pc.EnglishProductCategoryName;
 
 -- Rank customers by their SalesAmount growth rate over 6 months.
 
