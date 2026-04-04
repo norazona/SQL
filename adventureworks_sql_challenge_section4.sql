@@ -158,7 +158,6 @@ WHERE MonthlyRank = 1
 ORDER BY YearMonth ASC;
 
 -- Calculate each product’s contribution to its Category’s total sales using SUM() OVER().
-
 SELECT
 	s.ProductKey,
 	pc.EnglishProductCategoryName AS ProductCategory,
@@ -179,7 +178,93 @@ GROUP BY
 	pc.EnglishProductCategoryName;
 
 -- Rank customers by their SalesAmount growth rate over 6 months.
+WITH customer_sales AS (
+	-- Get customers with Sales Aggregated into two 6 month buckets
+	SELECT
+		s.CustomerKey as CustomerKey,
+		CONCAT(c.FirstName,' ', c.LastName) AS FullName,
+		SUM(CASE WHEN d.FullDateAlternateKey BETWEEN '2012-07-01' AND '2012-12-31' THEN s.SalesAmount ELSE 0 END) AS PreviousSales,
+		SUM(CASE WHEN d.FullDateAlternateKey BETWEEN '2013-01-01' AND '2013-06-30' THEN s.SalesAmount ELSE 0 END) AS RecentSales
+	FROM FactInternetSales s
+	INNER JOIN DimCustomer c
+		ON s.CustomerKey = c.CustomerKey
+	INNER JOIN DimDate d
+		ON s.OrderDateKey = d.DateKey
+	GROUP BY 
+		s.CustomerKey, 
+		CONCAT(c.FirstName,' ', c.LastName)
+),
+growth_rate AS (
+	-- Calculate the growth rate for each customer
+	SELECT
+		CustomerKey,
+		FullName,
+		RecentSales,
+		PreviousSales,
+		((RecentSales - PreviousSales) / PreviousSales) * 100 AS GrowthRatePercentage
+	FROM customer_sales
+	WHERE PreviousSales > 0 
+	AND RecentSales > 0
+)
+SELECT 
+	CustomerKey,
+	FullName,
+	ROUND(PreviousSales, 2) AS PreviousSales,
+	ROUND(RecentSales, 2) AS RecentSales,
+	GrowthRatePercentage,
+	DENSE_RANK() OVER (ORDER BY GrowthRatePercentage DESC) AS customer_rank
+FROM growth_rate;
 
 -- Identify the bottom 10% of products by sales in each Category using a window function.
+WITH product_sales AS (
+	SELECT
+		p.EnglishProductName AS Product,
+		pc.EnglishProductCategoryName AS ProductCategory,
+		SUM(SalesAmount) AS TotalSales
+	FROM FactInternetSales s
+	INNER JOIN DimProduct p
+		ON s.ProductKey = p.ProductKey
+	INNER JOIN DimProductSubcategory psc
+		ON p.ProductSubcategoryKey = psc.ProductSubcategoryKey
+	INNER JOIN DimProductCategory pc
+		ON psc.ProductCategoryKey = pc.ProductCategoryKey
+	GROUP BY 
+		p.EnglishProductName,
+		pc.EnglishProductCategoryName
+),
+product_ranks AS (
+	SELECT
+		ProductCategory,
+		Product,
+		TotalSales,
+		PERCENT_RANK() OVER ( PARTITION BY ProductCategory ORDER BY TotalSales ASC) AS percent_rank
+	FROM product_sales
+)
+SELECT 
+	ProductCategory,
+	Product
+FROM product_ranks 
+WHERE percent_rank <= 0.1
 
 -- Compute year-over-year growth in sales per Territory using window functions.
+WITH territory_sales AS (
+	SELECT 
+		YEAR(OrderDate) AS Year,
+		st.SalesTerritoryRegion AS Territory,
+		ROUND(SUM(SalesAmount), 2) AS TotalSales,
+		ROUND(LAG(SUM(SalesAmount)) OVER (PARTITION BY st.SalesTerritoryRegion ORDER BY YEAR(OrderDate) ASC), 2) AS PreviousYearSales
+	FROM FactInternetSales s
+	INNER JOIN DimSalesTerritory st
+		ON s.SalesTerritoryKey = st.SalesTerritoryKey
+	GROUP BY 
+		st.SalesTerritoryRegion,
+		YEAR(OrderDate)
+)
+SELECT 
+	Year,
+	Territory,
+	TotalSales,
+	PreviousYearSales,
+	((TotalSales - PreviousYearSales) / PreviousYearSales) * 100 AS YoYGrowthRate
+FROM territory_sales
+ORDER BY Territory ASC;
